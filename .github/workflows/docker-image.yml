@@ -14,11 +14,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Log
-      run: echo $DOCKER_HUB_PAT
     - name: Build the Docker image
       run: make container REGISTRY=docker.io/dbtek VERSION=latest
     - name: Login to registry
-      run: echo $DOCKER_HUB_PAT | docker login -u dbtek --password-stdin
+      run: echo ${{ secrets.$DOCKER_HUB_PAT }} | docker login -u dbtek --password-stdin
     - name: Push to registry
       run: docker push dbtek/git-sync:latest__linux_amd64
