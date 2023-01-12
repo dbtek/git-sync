@@ -14,6 +14,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Log
+      run: echo $DOCKER_HUB_PAT
     - name: Build the Docker image
       run: make container REGISTRY=docker.io/dbtek VERSION=latest
     - name: Login to registry
