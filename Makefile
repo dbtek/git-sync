@@ -24,6 +24,10 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 # This version-strategy uses a manual value to set the version string
 #VERSION ?= 1.2.3
 
+# Set these to cross-compile.
+GOOS ?=
+GOARCH ?=
+
 # Set this to 1 to build a debugger-friendly binary.
 DBG ?=
 
@@ -35,20 +39,19 @@ HTTPS_PROXY ?=
 ### These variables should not need tweaking.
 ###
 
-SRC_DIRS := cmd pkg # directories which hold app source (not vendored)
-
 ALL_PLATFORMS := linux/amd64 linux/arm linux/arm64 linux/ppc64le linux/s390x
 
 # Used internally.  Users should pass GOOS and/or GOARCH.
 OS := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
 ARCH := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
 
-BASEIMAGE ?= k8s.gcr.io/build-image/debian-base:bullseye-v1.4.2
+BASEIMAGE ?= registry.k8s.io/build-image/debian-base:bookworm-v1.0.0
 
 IMAGE := $(REGISTRY)/$(BIN)
-TAG := $(VERSION)__$(OS)_$(ARCH)
+TAG := $(VERSION)
+OS_ARCH_TAG := $(TAG)__$(OS)_$(ARCH)
 
-BUILD_IMAGE ?= golang:1.18-alpine
+BUILD_IMAGE ?= golang:1.20-alpine
 
 DBG_MAKEFILE ?=
 ifneq ($(DBG_MAKEFILE),1)
@@ -141,7 +144,7 @@ $(OUTBIN): .go/$(OUTBIN).stamp
 	fi
 
 # Used to track state in hidden files.
-DOTFILE_IMAGE = $(subst /,_,$(IMAGE))-$(TAG)
+DOTFILE_IMAGE = $(subst /,_,$(IMAGE))-$(OS_ARCH_TAG)
 
 LICENSES = .licenses
 
@@ -165,6 +168,7 @@ container: .container-$(DOTFILE_IMAGE) container-name
 	    -e 's|{ARG_ARCH}|$(ARCH)|g'      \
 	    -e 's|{ARG_OS}|$(OS)|g'          \
 	    -e 's|{ARG_FROM}|$(BASEIMAGE)|g' \
+	    -e 's|{ARG_STAGING}|/staging|g' \
 	    Dockerfile.in > .dockerfile-$(OS)_$(ARCH)
 	HASH_LICENSES=$$(find $(LICENSES) -type f                    \
 	    | xargs md5sum | md5sum | cut -f1 -d' ');                \
@@ -182,27 +186,27 @@ container: .container-$(DOTFILE_IMAGE) container-name
 	    --platform "$(OS)/$(ARCH)"                               \
 	    --build-arg HTTP_PROXY=$(HTTP_PROXY)                     \
 	    --build-arg HTTPS_PROXY=$(HTTPS_PROXY)                   \
-	    -t $(IMAGE):$(TAG)                                       \
+	    -t $(IMAGE):$(OS_ARCH_TAG)                               \
 	    -f .dockerfile-$(OS)_$(ARCH)                             \
 	    .
-	docker images -q $(IMAGE):$(TAG) > $@
+	docker images -q $(IMAGE):$(OS_ARCH_TAG) > $@
 
 container-name:
-	echo "container: $(IMAGE):$(TAG)"
+	echo "container: $(IMAGE):$(OS_ARCH_TAG)"
 	echo
 
 push: .push-$(DOTFILE_IMAGE) push-name
 .push-$(DOTFILE_IMAGE): .container-$(DOTFILE_IMAGE)
-	docker push $(IMAGE):$(TAG)
-	docker images -q $(IMAGE):$(TAG) > $@
+	docker push $(IMAGE):$(OS_ARCH_TAG)
+	docker images -q $(IMAGE):$(OS_ARCH_TAG) > $@
 
 push-name:
-	echo "pushed: $(IMAGE):$(TAG)"
+	echo "pushed: $(IMAGE):$(OS_ARCH_TAG)"
 	echo
 
 # This depends on github.com/estesp/manifest-tool in $PATH.
 manifest-list: all-push
-	echo "manifest-list: $(REGISTRY)/$(BIN):$(VERSION)"
+	echo "manifest-list: $(REGISTRY)/$(BIN):$(TAG)"
 	pushd tools >/dev/null;                                   \
 	  export GOOS=$(shell go env GOHOSTOS);                   \
 	  export GOARCH=$(shell go env GOHOSTARCH);               \
@@ -214,8 +218,17 @@ manifest-list: all-push
 	    --password=$$(gcloud auth print-access-token)     \
 	    push from-args                                    \
 	    --platforms "$$platforms"                         \
-	    --template $(REGISTRY)/$(BIN):$(VERSION)__OS_ARCH \
-	    --target $(REGISTRY)/$(BIN):$(VERSION)
+	    --template $(REGISTRY)/$(BIN):$(TAG)__OS_ARCH \
+	    --target $(REGISTRY)/$(BIN):$(TAG)
+
+release:
+	if [ -z "$(TAG)" ]; then        \
+		echo "ERROR: TAG must be set"; \
+		false;                  \
+	fi
+	docker pull "$(BUILD_IMAGE)"
+	git tag -am "$(TAG)" "$(TAG)"
+	make manifest-list
 
 version:
 	echo $(VERSION)
@@ -233,11 +246,11 @@ test: $(BUILD_DIRS)
 	    --env HTTPS_PROXY=$(HTTPS_PROXY)                       \
 	    $(BUILD_IMAGE)                                         \
 	    /bin/sh -c "                                           \
-	        ./build/test.sh $(SRC_DIRS)                        \
+	        ./build/test.sh ./...                              \
 	    "
 	./test_e2e.sh
 
-TEST_TOOLS := $(shell ls _test_tools)
+TEST_TOOLS := $(shell find _test_tools/* -type d -printf "%f ")
 test-tools: $(foreach tool, $(TEST_TOOLS), .container-test_tool.$(tool))
 
 .container-test_tool.%: _test_tools/% _test_tools/%/*
@@ -263,3 +276,11 @@ container-clean:
 
 bin-clean:
 	rm -rf .go bin
+
+lint-staticcheck:
+	go run honnef.co/go/tools/cmd/staticcheck@2023.1.3
+
+lint-golangci-lint:
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.3 run
+
+lint: lint-staticcheck lint-golangci-lint

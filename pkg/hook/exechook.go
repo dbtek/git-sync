@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"k8s.io/git-sync/pkg/cmd"
@@ -29,13 +28,13 @@ import (
 // Exechook structure, implements Hook
 type Exechook struct {
 	// Runner
-	cmdrunner *cmd.Runner
+	cmdrunner cmd.Runner
 	// Command to run
 	command string
 	// Command args
 	args []string
-	// Git root path
-	gitRoot string
+	// How to get a worktree path
+	getWorktree func(hash string) string
 	// Timeout for the command
 	timeout time.Duration
 	// Logger
@@ -43,14 +42,14 @@ type Exechook struct {
 }
 
 // NewExechook returns a new Exechook
-func NewExechook(cmdrunner *cmd.Runner, command, gitroot string, args []string, timeout time.Duration, log logintf) *Exechook {
+func NewExechook(cmdrunner cmd.Runner, command string, getWorktree func(string) string, args []string, timeout time.Duration, log logintf) *Exechook {
 	return &Exechook{
-		cmdrunner: cmdrunner,
-		command:   command,
-		gitRoot:   gitroot,
-		args:      args,
-		timeout:   timeout,
-		log:       log,
+		cmdrunner:   cmdrunner,
+		command:     command,
+		getWorktree: getWorktree,
+		args:        args,
+		timeout:     timeout,
+		log:         log,
 	}
 }
 
@@ -64,13 +63,16 @@ func (h *Exechook) Do(ctx context.Context, hash string) error {
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
-	worktreePath := filepath.Join(h.gitRoot, hash)
+	worktreePath := h.getWorktree(hash)
 
 	env := os.Environ()
 	env = append(env, envKV("GITSYNC_HASH", hash))
 
-	h.log.V(0).Info("running exechook", "command", h.command, "timeout", h.timeout)
-	_, err := h.cmdrunner.Run(ctx, worktreePath, env, h.command, h.args...)
+	h.log.V(0).Info("running exechook", "hash", hash, "command", h.command, "timeout", h.timeout)
+	stdout, stderr, err := h.cmdrunner.Run(ctx, worktreePath, env, h.command, h.args...)
+	if err == nil {
+		h.log.V(1).Info("exechook succeeded", "hash", hash, "stdout", stdout, "stderr", stderr)
+	}
 	return err
 }
 

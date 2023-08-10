@@ -35,10 +35,9 @@ spec:
           # "current" (see -dest below) which points to a checked-out copy of
           # the master branch (see -branch) of the repo (see -repo).
           # NOTE: git-sync already runs as non-root.
-          image: k8s.gcr.io/git-sync/git-sync:v4.0.0
+          image: registry.k8s.io/git-sync/git-sync:v4.0.0
           args:
             - --repo=https://github.com/kubernetes/git-sync
-            - --branch=master
             - --depth=1
             - --period=60
             - --link=current

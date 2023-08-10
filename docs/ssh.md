@@ -69,9 +69,9 @@ Secret (e.g. "git-creds" used in both above examples).
 ## Step 3: Configure git-sync container
 
 In your git-sync container configuration, mount the Secret volume at
-"/etc/git-secret". Ensure that the `--repo` flag (or the GIT_SYNC_REPO
+"/etc/git-secret". Ensure that the `--repo` flag (or the GITSYNC_REPO
 environment variable) is set to use the SSH protocol (e.g.
-git@github.com/foo/bar) , and set the `--ssh` flags (or set GIT_SYNC_SSH to
+git@github.com/foo/bar) , and set the `--ssh` flags (or set GITSYNC_SSH to
 "true").  You will also need to set your container's `securityContext` to run
 as user ID "65533" which is created for running git-sync as non-root.
 
@@ -79,12 +79,11 @@ as user ID "65533" which is created for running git-sync as non-root.
       # ...
       containers:
       - name: git-sync
-        image: k8s.gcr.io/git-sync:v3.1.5
+        image: registry.k8s.io/git-sync:v4.0.0
         args:
          - "--ssh"
          - "--repo=git@github.com:foo/bar"
          - "--link=bar"
-         - "--branch=master"
         volumeMounts:
         - name: git-secret
           mountPath: /etc/git-secret
@@ -138,12 +137,10 @@ spec:
           defaultMode: 0400
       containers:
       - name: git-sync
-        image: k8s.gcr.io/git-sync:v3.1.5
+        image: registry.k8s.io/git-sync:v4.0.0
         args:
          - "--ssh"
          - "--repo=git@github.com:torvalds/linux"
-         - "--link=linux"
-         - "--branch=master"
          - "--depth=1"
         securityContext:
           runAsUser: 65533 # git-sync user

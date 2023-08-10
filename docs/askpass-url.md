@@ -1,4 +1,4 @@
-# Using an Http Auth URL with git-sync
+# Using an HTTP auth URL with git-sync
 
 ## Step 1: Create a GIT_ASKPASS HTTP Service
 
@@ -8,15 +8,15 @@ Example of the service's output, see more at <https://git-scm.com/docs/gitcreden
 
 ```
 username=xxx@example.com
-password=ya29.mysecret
+password=mysecret
 ```
 
 ## Step 2: Configure git-sync container
 
 In your git-sync container configuration, specify the GIT_ASKPASS URL
 
-The credentials will pass in plain text, make sure the connection between git-sync
-and GIT ASKPASS Service are secure.
+The credentials will pass in plain text, so make sure the connection between
+git-sync and GIT ASKPASS Service is secure.
 
 See the askpass e2e test as an example.
 
@@ -24,8 +24,8 @@ See the askpass e2e test as an example.
 name: "git-sync"
 ...
 env:
-  - name: "GIT_SYNC_REPO",
+  - name: "GITSYNC_REPO",
     value: "https://source.developers.google.com/p/[GCP PROJECT ID]/r/[REPO NAME]"
-  - name: "GIT_SYNC_ASKPASS_URL",
+  - name: "GITSYNC_ASKPASS_URL",
     value: "http://localhost:9102/git_askpass",
 ```
