@@ -31,6 +31,14 @@ commit (by SHA) it needs.  This transfers less data and closes the race
 condition where a symbolic name can change after `git ls-remote` but before
 `git fetch`.
 
+### The v4.2+ loop
+
+The v4.2 loop refines the v4 loop even further.  Instead of using ls-remote to
+see what the upstream has and then fetching it, git-sync sill just fetch it by
+ref.  If the local sync already has the corresponding hash, nothing more will
+be synced.  If it did not have that hash before, then it does now and can
+update the worktree.
+
 ## Flags
 
 The flag syntax parsing has changed in v4.  git-sync v3 accept flags in Go's
@@ -63,6 +71,26 @@ and try to set `--ref` from them.
     |    ""    | tagname | tagname | remote tag `tagname`         |
     |   other  |  other  |   ""    | error                        |
     |----------|---------|---------|------------------------------|
+
+#### Default target
+
+In git-sync v3, if neither `--branch` nor `--rev` were specified, the default
+was to sync the HEAD of the branch named "master".  Many git repos have changed
+to "main" or something else as the default branch name, so git-sync v4 changes
+the default target to be the HEAD of whatever the `--repo`'s default branch is.
+If that default branch is not "master", then the default target will be
+different in v4 than in v3.
+
+#### Abbreviated hashes
+
+Because of the fetch loop, git-sync v3 allowed a user to specify `--branch` and
+`--rev`, where the rev was a shortened hash (aka SHA), which would be locally
+expanded to the full hash.  v4 tries hard not to pull extra stuff, which means
+we don't have enough information locally to do that resolution, and there no
+way to ask the server to do it for us (at least, not as far as we know).
+
+The net result is that, when using a hash for `--ref`, it must be a full hash,
+and not an abbreviated form.
 
 ### Log-related flags
 
@@ -104,8 +132,22 @@ specified.
 
 The old `--change-permissions` flag was poorly designed and not able to express
 the real intentions (e.g. "allow group write" does not mean "set everything to
-0775").  The new `--group-write` flag should cover what people ACTUALLY are
-trying to do.  The `--change-permissions` flag is no longer supported.
+0775").  The new `--group-write` flag should cover what most people ACTUALLY
+are trying to do.
+
+There is one case where `--change-permissions` was useful and `--group-write`
+is not - making non-executable files in the repo executable so they can be run
+as exechooks.  The proper solution here is to make the file executable in the
+repo, rather than changing it after checkout.
+
+The `--change-permissions` flag is no longer supported.
+
+### SSH: `--ssh` is optional (after v4.0.0)
+
+The old `--ssh` flag is no longer needed - the value of `--repo` determines
+when SSH is used.  It is still accepted but does nothing.
+
+NOTE: v4.0.0 still requires `--ssh` but all releases beyond that do not.
 
 ### Manual: `--man`
 

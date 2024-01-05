@@ -105,205 +105,6 @@ const (
 
 const defaultDirMode = os.FileMode(0775) // subject to umask
 
-func envString(def string, key string, alts ...string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	for _, alt := range alts {
-		if val := os.Getenv(alt); val != "" {
-			fmt.Fprintf(os.Stderr, "env %s has been deprecated, use %s instead\n", alt, key)
-			return val
-		}
-	}
-	return def
-}
-
-func envBoolOrError(def bool, key string, alts ...string) (bool, error) {
-	parse := func(val string) (bool, error) {
-		parsed, err := strconv.ParseBool(val)
-		if err == nil {
-			return parsed, nil
-		}
-		return false, fmt.Errorf("ERROR: invalid bool env %s=%q: %w", key, val, err)
-	}
-
-	if val := os.Getenv(key); val != "" {
-		return parse(val)
-	}
-	for _, alt := range alts {
-		if val := os.Getenv(key); val != "" {
-			fmt.Fprintf(os.Stderr, "env %s has been deprecated, use %s instead\n", alt, key)
-			return parse(val)
-		}
-	}
-	return def, nil
-}
-func envBool(def bool, key string, alts ...string) bool {
-	val, err := envBoolOrError(def, key, alts...)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-		return false
-	}
-	return val
-}
-
-func envIntOrError(def int, key string, alts ...string) (int, error) {
-	parse := func(val string) (int, error) {
-		parsed, err := strconv.ParseInt(val, 0, 0)
-		if err == nil {
-			return int(parsed), nil
-		}
-		return 0, fmt.Errorf("ERROR: invalid int env %s=%q: %w", key, val, err)
-	}
-
-	if val := os.Getenv(key); val != "" {
-		return parse(val)
-	}
-	for _, alt := range alts {
-		if val := os.Getenv(key); val != "" {
-			fmt.Fprintf(os.Stderr, "env %s has been deprecated, use %s instead\n", alt, key)
-			return parse(val)
-		}
-	}
-	return def, nil
-}
-func envInt(def int, key string, alts ...string) int {
-	val, err := envIntOrError(def, key, alts...)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-		return 0
-	}
-	return val
-}
-
-func envFloatOrError(def float64, key string, alts ...string) (float64, error) {
-	parse := func(val string) (float64, error) {
-		parsed, err := strconv.ParseFloat(val, 64)
-		if err == nil {
-			return parsed, nil
-		}
-		return 0, fmt.Errorf("ERROR: invalid float env %s=%q: %w", key, val, err)
-	}
-
-	if val := os.Getenv(key); val != "" {
-		return parse(val)
-	}
-	for _, alt := range alts {
-		if val := os.Getenv(key); val != "" {
-			fmt.Fprintf(os.Stderr, "env %s has been deprecated, use %s instead\n", alt, key)
-			return parse(val)
-		}
-	}
-	return def, nil
-}
-func envFloat(def float64, key string, alts ...string) float64 {
-	val, err := envFloatOrError(def, key, alts...)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-		return 0
-	}
-	return val
-}
-
-func envDurationOrError(def time.Duration, key string, alts ...string) (time.Duration, error) {
-	parse := func(val string) (time.Duration, error) {
-		parsed, err := time.ParseDuration(val)
-		if err == nil {
-			return parsed, nil
-		}
-		return 0, fmt.Errorf("ERROR: invalid duration env %s=%q: %w", key, val, err)
-	}
-
-	if val := os.Getenv(key); val != "" {
-		return parse(val)
-	}
-	for _, alt := range alts {
-		if val := os.Getenv(key); val != "" {
-			fmt.Fprintf(os.Stderr, "env %s has been deprecated, use %s instead\n", alt, key)
-			return parse(val)
-		}
-	}
-	return def, nil
-}
-func envDuration(def time.Duration, key string, alts ...string) time.Duration {
-	val, err := envDurationOrError(def, key, alts...)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-		return 0
-	}
-	return val
-}
-
-// absPath is an absolute path string.  This type is intended to make it clear
-// when strings are absolute paths vs something else.  This does not verify or
-// mutate the input, so careless callers could make instances of this type that
-// are not actually absolute paths, or even "".
-type absPath string
-
-// String returns abs as a string.
-func (abs absPath) String() string {
-	return string(abs)
-}
-
-// Canonical returns a canonicalized form of abs, similar to filepath.Abs
-// (including filepath.Clean).  Unlike filepath.Clean, this preserves "" as a
-// special case.
-func (abs absPath) Canonical() (absPath, error) {
-	if abs == "" {
-		return abs, nil
-	}
-
-	result, err := filepath.Abs(abs.String())
-	if err != nil {
-		return "", err
-	}
-	return absPath(result), nil
-}
-
-// Join appends more path elements to abs, like filepath.Join.
-func (abs absPath) Join(elems ...string) absPath {
-	all := make([]string, 0, 1+len(elems))
-	all = append(all, abs.String())
-	all = append(all, elems...)
-	return absPath(filepath.Join(all...))
-}
-
-// Split breaks abs into stem and leaf parts (often directory and file, but not
-// necessarily), similar to filepath.Split.  Unlike filepath.Split, the
-// resulting stem part does not have any trailing path separators.
-func (abs absPath) Split() (string, string) {
-	if abs == "" {
-		return "", ""
-	}
-
-	// filepath.Split promises that dir+base == input, but trailing slashes on
-	// the dir is confusing and ugly.
-	pathSep := string(os.PathSeparator)
-	dir, base := filepath.Split(strings.TrimRight(abs.String(), pathSep))
-	dir = strings.TrimRight(dir, pathSep)
-	if len(dir) == 0 {
-		dir = string(os.PathSeparator)
-	}
-
-	return dir, base
-}
-
-// Dir returns the stem part of abs without the leaf, like filepath.Dir.
-func (abs absPath) Dir() string {
-	dir, _ := abs.Split()
-	return dir
-}
-
-// Base returns the leaf part of abs without the stem, like filepath.Base.
-func (abs absPath) Base() string {
-	_, base := abs.Split()
-	return base
-}
-
 // repoSync represents the remote repo and the local sync of it.
 type repoSync struct {
 	cmd          string         // the git command to run
@@ -342,7 +143,8 @@ func main() {
 	flHelp := pflag.BoolP("help", "h", false, "print help text and exit")
 	flManual := pflag.Bool("man", false, "print the full manual and exit")
 
-	flVerbose := pflag.IntP("verbose", "v", 0,
+	flVerbose := pflag.IntP("verbose", "v",
+		envInt(0, "GITSYNC_VERBOSE"),
 		"logs at this V level and lower will be printed")
 
 	flRepo := pflag.String("repo",
@@ -432,13 +234,11 @@ func main() {
 	flPasswordFile := pflag.String("password-file",
 		envString("", "GITSYNC_PASSWORD_FILE", "GIT_SYNC_PASSWORD_FILE"),
 		"the file from which the password or personal access token for git auth will be sourced")
+	flCredentials := pflagCredentialSlice("credential", envString("", "GITSYNC_CREDENTIAL"), "one or more credentials (see --man for details) available for authentication")
 
-	flSSH := pflag.Bool("ssh",
-		envBool(false, "GITSYNC_SSH", "GIT_SYNC_SSH"),
-		"use SSH for git operations")
-	flSSHKeyFile := pflag.String("ssh-key-file",
-		envString("/etc/git-secret/ssh", "GITSYNC_SSH_KEY_FILE", "GIT_SYNC_SSH_KEY_FILE", "GIT_SSH_KEY_FILE"),
-		"the SSH key to use")
+	flSSHKeyFiles := pflag.StringArray("ssh-key-file",
+		envStringArray("/etc/git-secret/ssh", "GITSYNC_SSH_KEY_FILE", "GIT_SYNC_SSH_KEY_FILE", "GIT_SSH_KEY_FILE"),
+		"the SSH key(s) to use")
 	flSSHKnownHosts := pflag.Bool("ssh-known-hosts",
 		envBool(true, "GITSYNC_SSH_KNOWN_HOSTS", "GIT_SYNC_KNOWN_HOSTS", "GIT_KNOWN_HOSTS"),
 		"enable SSH known_hosts verification")
@@ -490,6 +290,9 @@ func main() {
 	flDeprecatedRev := pflag.String("rev", envString("", "GIT_SYNC_REV"),
 		"DEPRECATED: use --ref instead")
 	mustMarkDeprecated("rev", "use --ref instead")
+	_ = pflag.Bool("ssh", false,
+		"DEPRECATED: this flag is no longer necessary")
+	mustMarkDeprecated("ssh", "no longer necessary")
 	flDeprecatedSyncHookCommand := pflag.String("sync-hook-command", envString("", "GIT_SYNC_HOOK_COMMAND"),
 		"DEPRECATED: use --exechook-command instead")
 	mustMarkDeprecated("sync-hook-command", "use --exechook-command instead")
@@ -544,7 +347,7 @@ func main() {
 	}
 	log := func() *logging.Logger {
 		dir, file := makeAbsPath(*flErrorFile, absRoot).Split()
-		return logging.New(dir, file, *flVerbose)
+		return logging.New(dir.String(), file, *flVerbose)
 	}()
 	cmdRunner := cmd.NewRunner(log)
 
@@ -671,37 +474,40 @@ func main() {
 		}
 	}
 
-	if *flPassword != "" && *flPasswordFile != "" {
-		handleConfigError(log, true, "ERROR: only one of --password and --password-file may be specified")
-	}
 	if *flUsername != "" {
 		if *flPassword == "" && *flPasswordFile == "" {
-			handleConfigError(log, true, "ERROR: --password or --password-file must be set when --username is specified")
+			handleConfigError(log, true, "ERROR: --password or --password-file must be specified when --username is specified")
+		}
+		if *flPassword != "" && *flPasswordFile != "" {
+			handleConfigError(log, true, "ERROR: only one of --password and --password-file may be specified")
+		}
+		if u, err := url.Parse(*flRepo); err == nil { // it may not even parse as a URL, that's OK
+			if u.User != nil {
+				handleConfigError(log, true, "ERROR: credentials may not be specified in --repo when --username is specified")
+			}
+		}
+	} else {
+		if *flPassword != "" {
+			handleConfigError(log, true, "ERROR: --password may only be specified when --username is specified")
+		}
+		if *flPasswordFile != "" {
+			handleConfigError(log, true, "ERROR: --password-file may only be specified when --username is specified")
 		}
 	}
 
-	if *flSSH {
-		if *flUsername != "" {
-			handleConfigError(log, true, "ERROR: only one of --ssh and --username may be specified")
-		}
-		if *flPassword != "" {
-			handleConfigError(log, true, "ERROR: only one of --ssh and --password may be specified")
-		}
-		if *flPasswordFile != "" {
-			handleConfigError(log, true, "ERROR: only one of --ssh and --password-file may be specified")
-		}
-		if *flAskPassURL != "" {
-			handleConfigError(log, true, "ERROR: only one of --ssh and --askpass-url may be specified")
-		}
-		if *flCookieFile {
-			handleConfigError(log, true, "ERROR: only one of --ssh and --cookie-file may be specified")
-		}
-		if *flSSHKeyFile == "" {
-			handleConfigError(log, true, "ERROR: --ssh-key-file must be specified when --ssh is set")
-		}
-		if *flSSHKnownHosts {
-			if *flSSHKnownHostsFile == "" {
-				handleConfigError(log, true, "ERROR: --ssh-known-hosts-file must be specified when --ssh-known-hosts is set")
+	if len(*flCredentials) > 0 {
+		for _, cred := range *flCredentials {
+			if cred.URL == "" {
+				handleConfigError(log, true, "ERROR: --credential URL must be specified")
+			}
+			if cred.Username == "" {
+				handleConfigError(log, true, "ERROR: --credential username must be specified")
+			}
+			if cred.Password == "" && cred.PasswordFile == "" {
+				handleConfigError(log, true, "ERROR: --credential password or password-file must be set")
+			}
+			if cred.Password != "" && cred.PasswordFile != "" {
+				handleConfigError(log, true, "ERROR: only one of --credential password and password-file may be specified")
 			}
 		}
 	}
@@ -724,7 +530,7 @@ func main() {
 		"uid", os.Getuid(),
 		"gid", os.Getgid(),
 		"home", os.Getenv("HOME"),
-		"flags", logSafeFlags())
+		"flags", logSafeFlags(*flVerbose))
 
 	if _, err := exec.LookPath(*flGitCmd); err != nil {
 		log.Error(err, "ERROR: git executable not found", "git", *flGitCmd)
@@ -761,6 +567,32 @@ func main() {
 	// Convert files into an absolute paths.
 	absLink := makeAbsPath(*flLink, absRoot)
 	absTouchFile := makeAbsPath(*flTouchFile, absRoot)
+
+	// Merge credential sources.
+	if *flUsername == "" {
+		// username and user@host URLs are validated as mutually exclusive
+		if u, err := url.Parse(*flRepo); err == nil { // it may not even parse as a URL, that's OK
+			if u.User != nil {
+				if user := u.User.Username(); user != "" {
+					*flUsername = user
+				}
+				if pass, found := u.User.Password(); found {
+					*flPassword = pass
+				}
+				u.User = nil
+				*flRepo = u.String()
+			}
+		}
+	}
+	if *flUsername != "" {
+		cred := credential{
+			URL:          *flRepo,
+			Username:     *flUsername,
+			Password:     *flPassword,
+			PasswordFile: *flPasswordFile,
+		}
+		*flCredentials = append([]credential{cred}, (*flCredentials)...)
+	}
 
 	if *flAddUser {
 		if err := addUser(); err != nil {
@@ -808,22 +640,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *flUsername != "" {
-		if *flPasswordFile != "" {
-			passwordFileBytes, err := os.ReadFile(*flPasswordFile)
+	// Finish populating credentials.
+	for i := range *flCredentials {
+		cred := &(*flCredentials)[i]
+		if cred.PasswordFile != "" {
+			passwordFileBytes, err := os.ReadFile(cred.PasswordFile)
 			if err != nil {
-				log.Error(err, "can't read password file", "file", *flPasswordFile)
+				log.Error(err, "can't read password file", "file", cred.PasswordFile)
 				os.Exit(1)
 			}
-			*flPassword = string(passwordFileBytes)
+			cred.Password = string(passwordFileBytes)
 		}
 	}
 
-	if *flSSH {
-		if err := git.SetupGitSSH(*flSSHKnownHosts, *flSSHKeyFile, *flSSHKnownHostsFile); err != nil {
-			log.Error(err, "can't set up git SSH", "keyFile", *flSSHKeyFile, "knownHosts", *flSSHKnownHosts, "knownHostsFile", *flSSHKnownHostsFile)
-			os.Exit(1)
-		}
+	// If the --repo or any submodule uses SSH, we need to know which keys.
+	if err := git.SetupGitSSH(*flSSHKnownHosts, *flSSHKeyFiles, *flSSHKnownHostsFile); err != nil {
+		log.Error(err, "can't set up git SSH", "keyFile", *flSSHKeyFiles, "knownHosts", *flSSHKnownHosts, "knownHostsFile", *flSSHKnownHostsFile)
+		os.Exit(1)
 	}
 
 	if *flCookieFile {
@@ -940,8 +773,8 @@ func main() {
 	// Craft a function that can be called to refresh credentials when needed.
 	refreshCreds := func(ctx context.Context) error {
 		// These should all be mutually-exclusive configs.
-		if *flUsername != "" {
-			if err := git.StoreCredentials(ctx, *flUsername, *flPassword); err != nil {
+		for _, cred := range *flCredentials {
+			if err := git.StoreCredentials(ctx, cred.URL, cred.Username, cred.Password); err != nil {
 				return err
 			}
 		}
@@ -958,7 +791,7 @@ func main() {
 	}
 
 	failCount := 0
-	firstLoop := true
+	syncCount := uint64(0)
 	for {
 		start := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), *flSyncTimeout)
@@ -976,7 +809,7 @@ func main() {
 			// this might have been called before, but also might not have
 			setRepoReady()
 			// We treat the first loop as a sync, including sending hooks.
-			if changed || firstLoop {
+			if changed || syncCount == 0 {
 				if absTouchFile != "" {
 					if err := touch(absTouchFile); err != nil {
 						log.Error(err, "failed to touch touch-file", "path", absTouchFile)
@@ -994,7 +827,7 @@ func main() {
 			} else {
 				updateSyncMetrics(metricKeyNoOp, start)
 			}
-			firstLoop = false
+			syncCount++
 
 			// Clean up old worktree(s) and run GC.
 			if err := git.cleanup(ctx); err != nil {
@@ -1023,10 +856,7 @@ func main() {
 				os.Exit(exitCode)
 			}
 
-			if isHash, err := git.IsKnownHash(ctx, git.ref); err != nil {
-				log.Error(err, "can't tell if ref is a git hash, exiting", "ref", git.ref)
-				os.Exit(1)
-			} else if isHash {
+			if hash == git.ref {
 				log.V(0).Info("ref appears to be a git hash, no further sync needed", "ref", git.ref)
 				log.DeleteErrorFile()
 				sleepForever()
@@ -1039,7 +869,7 @@ func main() {
 			log.DeleteErrorFile()
 		}
 
-		log.V(3).Info("next sync", "waitTime", flPeriod.String())
+		log.V(3).Info("next sync", "waitTime", flPeriod.String(), "syncCount", syncCount)
 		cancel()
 
 		// Sleep until the next sync. If syncSig is set then the sleep may
@@ -1101,10 +931,13 @@ const redactedString = "REDACTED"
 func redactURL(urlstr string) string {
 	u, err := url.Parse(urlstr)
 	if err != nil {
-		return err.Error()
+		// May be something like user@git.example.com:path/to/repo
+		return urlstr
 	}
 	if u.User != nil {
-		u.User = url.UserPassword(u.User.Username(), redactedString)
+		if _, found := u.User.Password(); found {
+			u.User = url.UserPassword(u.User.Username(), redactedString)
+		}
 	}
 	return u.String()
 }
@@ -1112,11 +945,21 @@ func redactURL(urlstr string) string {
 // logSafeFlags makes sure any sensitive args (e.g. passwords) are redacted
 // before logging.  This returns a slice rather than a map so it is always
 // sorted.
-func logSafeFlags() []string {
+func logSafeFlags(v int) []string {
 	ret := []string{}
 	pflag.VisitAll(func(fl *pflag.Flag) {
+		// Don't log unchanged values
+		if !fl.Changed && v <= 3 {
+			return
+		}
+
 		arg := fl.Name
 		val := fl.Value.String()
+
+		// Don't log empty, unchanged values
+		if val == "" && !fl.Changed && v < 6 {
+			return
+		}
 
 		// Handle --password
 		if arg == "password" {
@@ -1126,9 +969,19 @@ func logSafeFlags() []string {
 		if arg == "repo" {
 			val = redactURL(val)
 		}
-		// Don't log empty values
-		if val == "" {
-			return
+		// Handle --credential
+		if arg == "credential" {
+			orig := fl.Value.(*credentialSliceValue)
+			sl := []credential{} // make a copy of the slice so we can mutate it
+			for _, cred := range orig.value {
+				if cred.Password != "" {
+					cred.Password = redactedString
+				}
+				sl = append(sl, cred)
+			}
+			tmp := *orig // make a copy
+			tmp.value = sl
+			val = tmp.String()
 		}
 
 		ret = append(ret, "--"+arg+"="+val)
@@ -1245,7 +1098,7 @@ func (git *repoSync) initRepo(ctx context.Context) error {
 			// the contents rather than the dir itself, because a common use-case
 			// is to have a volume mounted at git.root, which makes removing it
 			// impossible.
-			git.log.V(0).Info("repo directory failed checks or was empty", "path", git.root)
+			git.log.V(0).Info("repo directory was empty or failed checks", "path", git.root)
 			if err := removeDirContents(git.root, git.log); err != nil {
 				return fmt.Errorf("can't wipe unusable root directory: %w", err)
 			}
@@ -1357,6 +1210,17 @@ func (git *repoSync) sanityCheckWorktree(ctx context.Context, worktree worktree)
 		return false
 	}
 
+	// Make sure it is synced to the right commmit.
+	stdout, _, err := git.Run(ctx, worktree.Path(), "rev-parse", "HEAD")
+	if err != nil {
+		git.log.Error(err, "can't get worktree HEAD", "path", worktree.Path())
+		return false
+	}
+	if stdout != worktree.Hash() {
+		git.log.V(0).Info("worktree HEAD does not match worktree", "path", worktree.Path(), "head", stdout)
+		return false
+	}
+
 	// Consistency-check the worktree.  Don't use --verbose because it can be
 	// REALLY verbose.
 	if _, _, err := git.Run(ctx, worktree.Path(), "fsck", "--no-progress", "--connectivity-only"); err != nil {
@@ -1426,25 +1290,25 @@ func (git *repoSync) publishSymlink(ctx context.Context, worktree worktree) erro
 	linkDir, linkFile := git.link.Split()
 
 	// Make sure the link directory exists.
-	if err := os.MkdirAll(linkDir, defaultDirMode); err != nil {
+	if err := os.MkdirAll(linkDir.String(), defaultDirMode); err != nil {
 		return fmt.Errorf("error making symlink dir: %w", err)
 	}
 
-	// newDir is absolute, so we need to change it to a relative path.  This is
+	// linkDir is absolute, so we need to change it to a relative path.  This is
 	// so it can be volume-mounted at another path and the symlink still works.
-	targetRelative, err := filepath.Rel(linkDir, targetPath.String())
+	targetRelative, err := filepath.Rel(linkDir.String(), targetPath.String())
 	if err != nil {
 		return fmt.Errorf("error converting to relative path: %w", err)
 	}
 
 	const tmplink = "tmp-link"
 	git.log.V(2).Info("creating tmp symlink", "dir", linkDir, "link", tmplink, "target", targetRelative)
-	if err := os.Symlink(targetRelative, filepath.Join(linkDir, tmplink)); err != nil {
+	if err := os.Symlink(targetRelative, filepath.Join(linkDir.String(), tmplink)); err != nil {
 		return fmt.Errorf("error creating symlink: %w", err)
 	}
 
 	git.log.V(2).Info("renaming symlink", "root", linkDir, "oldName", tmplink, "newName", linkFile)
-	if err := os.Rename(filepath.Join(linkDir, tmplink), git.link.String()); err != nil {
+	if err := os.Rename(filepath.Join(linkDir.String(), tmplink), git.link.String()); err != nil {
 		return fmt.Errorf("error replacing symlink: %w", err)
 	}
 
@@ -1646,49 +1510,6 @@ func (m multiError) Error() string {
 	return strings.Join(strs, "; ")
 }
 
-// remoteHashForRef returns the upstream hash for a given ref.
-func (git *repoSync) remoteHashForRef(ctx context.Context, ref string) (string, error) {
-	// Fetch both the bare and dereferenced ref. git sorts the results and
-	// prints the dereferenced result, if present, after the bare result, so we
-	// always want the last result it produces.
-	output, _, err := git.Run(ctx, git.root, "ls-remote", "-q", git.repo, ref, ref+"^{}")
-	if err != nil {
-		return "", err
-	}
-	line := lastNonEmptyLine(output)
-	parts := strings.Split(line, "\t") // guaranteed to have at least 1 element
-	return parts[0], nil
-}
-
-func lastNonEmptyLine(text string) string {
-	lines := strings.Split(text, "\n") // guaranteed to have at least 1 element
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line != "" {
-			return line
-		}
-	}
-	return ""
-}
-
-// IsKnownHash returns true if ref is the hash of a commit which is known to this
-// repo.  In the event that ref is an abbreviated hash (e.g. "abcd" which
-// resolves to "abcdef1234567890"), this will return true by prefix-matching.
-// If ref is ambiguous, it will consider whatever result git returns.  If ref
-// is not a hash or is not known to this repo, even if it appears to be a hash,
-// this will return false.
-func (git *repoSync) IsKnownHash(ctx context.Context, ref string) (bool, error) {
-	stdout, stderr, err := git.Run(ctx, git.root, "rev-parse", ref+"^{commit}")
-	if err != nil {
-		if strings.Contains(stderr, "unknown revision") {
-			return false, nil
-		}
-		return false, err
-	}
-	line := lastNonEmptyLine(stdout)
-	return strings.HasPrefix(line, ref), nil
-}
-
 // worktree represents a git worktree (which may or may not exist on disk).
 type worktree absPath
 
@@ -1726,14 +1547,15 @@ func (git *repoSync) currentWorktree() (worktree, error) {
 	if filepath.IsAbs(target) {
 		return worktree(target), nil
 	}
-	return worktree(git.root.Join(target)), nil
+	linkDir, _ := git.link.Split()
+	return worktree(linkDir.Join(target)), nil
 }
 
 // SyncRepo syncs the repository to the desired ref, publishes it via the link,
 // and tries to clean up any detritus.  This function returns whether the
 // current hash has changed and what the new hash is.
 func (git *repoSync) SyncRepo(ctx context.Context, refreshCreds func(context.Context) error) (bool, string, error) {
-	git.log.V(3).Info("syncing", "repo", git.repo)
+	git.log.V(3).Info("syncing", "repo", redactURL(git.repo))
 
 	if err := refreshCreds(ctx); err != nil {
 		return false, "", fmt.Errorf("credential refresh failed: %w", err)
@@ -1744,26 +1566,6 @@ func (git *repoSync) SyncRepo(ctx context.Context, refreshCreds func(context.Con
 		return false, "", err
 	}
 
-	// Figure out what hash the remote resolves to.
-	remoteHash, err := git.remoteHashForRef(ctx, git.ref)
-	if err != nil {
-		return false, "", err
-	}
-
-	// If we couldn't find a remote commit, it might have been a hash literal.
-	if remoteHash == "" {
-		// If git thinks it tastes like a hash, we just use that and if it
-		// is wrong, we will fail later.
-		output, _, err := git.Run(ctx, git.root, "rev-parse", git.ref)
-		if err != nil {
-			return false, "", err
-		}
-		result := strings.Trim(output, "\n")
-		if result == git.ref {
-			remoteHash = git.ref
-		}
-	}
-
 	// Find out what we currently have synced, if anything.
 	var currentWorktree worktree
 	if wt, err := git.currentWorktree(); err != nil {
@@ -1772,7 +1574,23 @@ func (git *repoSync) SyncRepo(ctx context.Context, refreshCreds func(context.Con
 		currentWorktree = wt
 	}
 	currentHash := currentWorktree.Hash()
-	git.log.V(3).Info("current hash", "hash", currentHash)
+	git.log.V(3).Info("current state", "hash", currentHash, "worktree", currentWorktree)
+
+	// This should be very fast if we already have the hash we need. Parameters
+	// like depth are set at fetch time.
+	if err := git.fetch(ctx, git.ref); err != nil {
+		return false, "", err
+	}
+
+	// Figure out what we got.  The ^{} syntax "peels" annotated tags to
+	// their underlying commit hashes, but has no effect if we fetched a
+	// branch, plain tag, or hash.
+	remoteHash := ""
+	if output, _, err := git.Run(ctx, git.root, "rev-parse", "FETCH_HEAD^{}"); err != nil {
+		return false, "", err
+	} else {
+		remoteHash = strings.Trim(output, "\n")
+	}
 
 	if currentHash == remoteHash {
 		// We seem to have the right hash already.  Let's be sure it's good.
@@ -1795,17 +1613,12 @@ func (git *repoSync) SyncRepo(ctx context.Context, refreshCreds func(context.Con
 	// are set properly.  This is cheap when we already have the target hash.
 	if changed || git.syncCount == 0 {
 		git.log.V(0).Info("update required", "ref", git.ref, "local", currentHash, "remote", remoteHash, "syncCount", git.syncCount)
-
-		// Parameters like depth are set at fetch time.
-		if err := git.fetch(ctx, remoteHash); err != nil {
-			return false, "", err
-		}
 		metricFetchCount.Inc()
 
 		// Reset the repo (note: not the worktree - that happens later) to the new
 		// ref.  This makes subsequent fetches much less expensive.  It uses --soft
 		// so no files are checked out.
-		if _, _, err := git.Run(ctx, git.root, "reset", "--soft", "FETCH_HEAD"); err != nil {
+		if _, _, err := git.Run(ctx, git.root, "reset", "--soft", remoteHash); err != nil {
 			return false, "", err
 		}
 
@@ -1850,7 +1663,10 @@ func (git *repoSync) SyncRepo(ctx context.Context, refreshCreds func(context.Con
 		// Regular cleanup will happen in the outer loop, to catch stale
 		// worktrees.
 
-		if currentWorktree != git.worktreeFor(currentHash) {
+		// We can end up here with no current hash but (the expectation of) a
+		// current worktree (e.g. the hash was synced but the worktree does not
+		// exist).
+		if currentHash != "" && currentWorktree != git.worktreeFor(currentHash) {
 			// The old worktree might have come from a prior version, and so
 			// not get caught by the normal cleanup.
 			os.RemoveAll(currentWorktree.Path().String())
@@ -1864,7 +1680,7 @@ func (git *repoSync) SyncRepo(ctx context.Context, refreshCreds func(context.Con
 
 // fetch retrieves the specified ref from the upstream repo.
 func (git *repoSync) fetch(ctx context.Context, ref string) error {
-	git.log.V(1).Info("fetching", "ref", ref, "repo", git.repo)
+	git.log.V(2).Info("fetching", "ref", ref, "repo", redactURL(git.repo))
 
 	// Fetch the ref and do some cleanup, setting or un-setting the repo's
 	// shallow flag as appropriate.
@@ -1913,12 +1729,12 @@ func md5sum(s string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// StoreCredentials stores the username and password for later use.
-func (git *repoSync) StoreCredentials(ctx context.Context, username, password string) error {
-	git.log.V(1).Info("storing git credentials")
-	git.log.V(9).Info("md5 of credentials", "username", md5sum(username), "password", md5sum(password))
+// StoreCredentials stores a username and password for later use.
+func (git *repoSync) StoreCredentials(ctx context.Context, url, username, password string) error {
+	git.log.V(1).Info("storing git credential", "url", redactURL(url))
+	git.log.V(9).Info("md5 of credential", "url", url, "username", md5sum(username), "password", md5sum(password))
 
-	creds := fmt.Sprintf("url=%v\nusername=%v\npassword=%v\n", git.repo, username, password)
+	creds := fmt.Sprintf("url=%v\nusername=%v\npassword=%v\n", url, username, password)
 	_, _, err := git.RunWithStdin(ctx, "", creds, "credential", "approve")
 	if err != nil {
 		return fmt.Errorf("can't configure git credentials: %w", err)
@@ -1927,7 +1743,7 @@ func (git *repoSync) StoreCredentials(ctx context.Context, username, password st
 	return nil
 }
 
-func (git *repoSync) SetupGitSSH(setupKnownHosts bool, pathToSSHSecret, pathToSSHKnownHosts string) error {
+func (git *repoSync) SetupGitSSH(setupKnownHosts bool, pathsToSSHSecrets []string, pathToSSHKnownHosts string) error {
 	git.log.V(1).Info("setting up git SSH credentials")
 
 	// If the user sets GIT_SSH_COMMAND we try to respect it.
@@ -1936,15 +1752,11 @@ func (git *repoSync) SetupGitSSH(setupKnownHosts bool, pathToSSHSecret, pathToSS
 		sshCmd = "ssh"
 	}
 
-	if _, err := os.Stat(pathToSSHSecret); err != nil {
-		return fmt.Errorf("can't access SSH key file %s: %w", pathToSSHSecret, err)
+	for _, p := range pathsToSSHSecrets {
+		sshCmd += fmt.Sprintf(" -i %s", p)
 	}
-	sshCmd += fmt.Sprintf(" -i %s", pathToSSHSecret)
 
 	if setupKnownHosts {
-		if _, err := os.Stat(pathToSSHKnownHosts); err != nil {
-			return fmt.Errorf("can't access SSH known_hosts file %s: %w", pathToSSHKnownHosts, err)
-		}
 		sshCmd += fmt.Sprintf(" -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s", pathToSSHKnownHosts)
 	} else {
 		sshCmd += " -o StrictHostKeyChecking=no"
@@ -2030,7 +1842,7 @@ func (git *repoSync) CallAskPassURL(ctx context.Context) error {
 		}
 	}
 
-	if err := git.StoreCredentials(ctx, username, password); err != nil {
+	if err := git.StoreCredentials(ctx, git.repo, username, password); err != nil {
 		return err
 	}
 
@@ -2052,6 +1864,10 @@ func (git *repoSync) SetupDefaultGitConfigs(ctx context.Context) error {
 		// How to manage credentials (for those modes that need it).
 		key: "credential.helper",
 		val: "cache --timeout 3600",
+	}, {
+		// Never prompt for a password.
+		key: "core.askPass",
+		val: "true",
 	}, {
 		// Mark repos as safe (avoid a "dubious ownership" error).
 		key: "safe.directory",
@@ -2294,8 +2110,8 @@ OPTIONS
 
     --add-user, $GITSYNC_ADD_USER
             Add a record to /etc/passwd for the current UID/GID.  This is
-            needed to use SSH with an arbitrary UID (see --ssh).  This assumes
-            that /etc/passwd is writable by the current UID.
+            needed to use SSH with an arbitrary UID.  This assumes that
+            /etc/passwd is writable by the current UID.
 
     --askpass-url <string>, $GITSYNC_ASKPASS_URL
             A URL to query for git credentials.  The query must return success
@@ -2305,6 +2121,26 @@ OPTIONS
     --cookie-file <string>, $GITSYNC_COOKIE_FILE
             Use a git cookiefile (/etc/git-secret/cookie_file) for
             authentication.
+
+    --credential <string>, $GITSYNC_CREDENTIAL
+            Make one or more credentials available for authentication (see git
+            help credential).  This is similar to --username and --password or
+            --password-file, but for specific URLs, for example when using
+            submodules.  The value for this flag is either a JSON-encoded
+            object (see the schema below) or a JSON-encoded list of that same
+            object type.  This flag may be specified more than once.
+
+            Object schema:
+              - url:            string, required
+              - username:       string, required
+              - password:       string, optional
+              - password-file:  string, optional
+
+            One of password or password-file must be specified.  Users should
+            prefer password-file for better security.
+
+            Example:
+              --credential='{"url":"https://github.com", "username":"myname", "password-file":"/creds/mypass"}'
 
     --depth <int>, $GITSYNC_DEPTH
             Create a shallow clone with history truncated to the specified
@@ -2458,16 +2294,15 @@ OPTIONS
             details) which controls which files and directories will be checked
             out.  If not specified, the default is to check out the entire repo.
 
-    --ssh, $GITSYNC_SSH
-            Use SSH for git authentication and operations.
-
     --ssh-key-file <string>, $GITSYNC_SSH_KEY_FILE
-            The SSH key to use when using --ssh.  If not specified, this
-            defaults to "/etc/git-secret/ssh".
+            The SSH key(s) to use when using git over SSH.  This flag may be
+            specified more than once and the environment variable will be
+            parsed like PATH - using a colon (':') to separate elements.  If
+            not specified, this defaults to "/etc/git-secret/ssh".
 
     --ssh-known-hosts, $GITSYNC_SSH_KNOWN_HOSTS
-            Enable SSH known_hosts verification when using --ssh.  If not
-            specified, this defaults to true.
+            Enable SSH known_hosts verification when using git over SSH.  If
+            not specified, this defaults to true.
 
     --ssh-known-hosts-file <string>, $GITSYNC_SSH_KNOWN_HOSTS_FILE
             The known_hosts file to use when --ssh-known-hosts is specified.
@@ -2504,9 +2339,10 @@ OPTIONS
 
     --username <string>, $GITSYNC_USERNAME
             The username to use for git authentication (see --password-file or
-            --password).
+            --password).  If more than one username and password is required
+            (e.g. with submodules), use --credential.
 
-    -v, --verbose <int>
+    -v, --verbose <int>, $GITSYNC_VERBOSE
             Set the log verbosity level.  Logs at this level and lower will be
             printed.  Logs follow these guidelines:
 
@@ -2572,12 +2408,18 @@ AUTHENTICATION
             consults a URL (e.g. http://metadata) to get credentials on each
             sync.
 
+            When using submodules it may be necessary to specify more than one
+            username and password, which can be done with --credential
+            (GITSYNC_CREDENTIAL).  All of the username+password pairs, from
+            both --username/--password and --credential are fed into 'git
+            credential approve'.
+
     SSH
-            When --ssh (GITSYNC_SSH) is specified, the --ssh-key-file
-            (GITSYNC_SSH_KEY_FILE) will be used.  Users are strongly advised
-            to also use --ssh-known-hosts (GITSYNC_SSH_KNOWN_HOSTS) and
-            --ssh-known-hosts-file (GITSYNC_SSH_KNOWN_HOSTS_FILE) when using
-            SSH.
+            When an SSH transport is specified, the key(s) defined in
+            --ssh-key-file (GITSYNC_SSH_KEY_FILE) will be used.  Users are
+            strongly advised to also use --ssh-known-hosts
+            (GITSYNC_SSH_KNOWN_HOSTS) and --ssh-known-hosts-file
+            (GITSYNC_SSH_KNOWN_HOSTS_FILE) when using SSH.
 
     cookies
             When --cookie-file (GITSYNC_COOKIE_FILE) is specified, the

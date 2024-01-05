@@ -149,8 +149,8 @@ OPTIONS
 
     --add-user, $GITSYNC_ADD_USER
             Add a record to /etc/passwd for the current UID/GID.  This is
-            needed to use SSH with an arbitrary UID (see --ssh).  This assumes
-            that /etc/passwd is writable by the current UID.
+            needed to use SSH with an arbitrary UID.  This assumes that
+            /etc/passwd is writable by the current UID.
 
     --askpass-url <string>, $GITSYNC_ASKPASS_URL
             A URL to query for git credentials.  The query must return success
@@ -160,6 +160,26 @@ OPTIONS
     --cookie-file <string>, $GITSYNC_COOKIE_FILE
             Use a git cookiefile (/etc/git-secret/cookie_file) for
             authentication.
+
+    --credential <string>, $GITSYNC_CREDENTIAL
+            Make one or more credentials available for authentication (see git
+            help credential).  This is similar to --username and --password or
+            --password-file, but for specific URLs, for example when using
+            submodules.  The value for this flag is either a JSON-encoded
+            object (see the schema below) or a JSON-encoded list of that same
+            object type.  This flag may be specified more than once.
+
+            Object schema:
+              - url:            string, required
+              - username:       string, required
+              - password:       string, optional
+              - password-file:  string, optional
+
+            One of password or password-file must be specified.  Users should
+            prefer password-file for better security.
+
+            Example:
+              --credential='{"url":"https://github.com", "username":"myname", "password-file":"/creds/mypass"}'
 
     --depth <int>, $GITSYNC_DEPTH
             Create a shallow clone with history truncated to the specified
@@ -313,16 +333,15 @@ OPTIONS
             details) which controls which files and directories will be checked
             out.  If not specified, the default is to check out the entire repo.
 
-    --ssh, $GITSYNC_SSH
-            Use SSH for git authentication and operations.
-
     --ssh-key-file <string>, $GITSYNC_SSH_KEY_FILE
-            The SSH key to use when using --ssh.  If not specified, this
-            defaults to "/etc/git-secret/ssh".
+            The SSH key(s) to use when using git over SSH.  This flag may be
+            specified more than once and the environment variable will be
+            parsed like PATH - using a colon (':') to separate elements.  If
+            not specified, this defaults to "/etc/git-secret/ssh".
 
     --ssh-known-hosts, $GITSYNC_SSH_KNOWN_HOSTS
-            Enable SSH known_hosts verification when using --ssh.  If not
-            specified, this defaults to true.
+            Enable SSH known_hosts verification when using git over SSH.  If
+            not specified, this defaults to true.
 
     --ssh-known-hosts-file <string>, $GITSYNC_SSH_KNOWN_HOSTS_FILE
             The known_hosts file to use when --ssh-known-hosts is specified.
@@ -359,9 +378,10 @@ OPTIONS
 
     --username <string>, $GITSYNC_USERNAME
             The username to use for git authentication (see --password-file or
-            --password).
+            --password).  If more than one username and password is required
+            (e.g. with submodules), use --credential.
 
-    -v, --verbose <int>
+    -v, --verbose <int>, $GITSYNC_VERBOSE
             Set the log verbosity level.  Logs at this level and lower will be
             printed.  Logs follow these guidelines:
 
@@ -427,12 +447,18 @@ AUTHENTICATION
             consults a URL (e.g. http://metadata) to get credentials on each
             sync.
 
+            When using submodules it may be necessary to specify more than one
+            username and password, which can be done with --credential
+            (GITSYNC_CREDENTIAL).  All of the username+password pairs, from
+            both --username/--password and --credential are fed into 'git
+            credential approve'.
+
     SSH
-            When --ssh (GITSYNC_SSH) is specified, the --ssh-key-file
-            (GITSYNC_SSH_KEY_FILE) will be used.  Users are strongly advised
-            to also use --ssh-known-hosts (GITSYNC_SSH_KNOWN_HOSTS) and
-            --ssh-known-hosts-file (GITSYNC_SSH_KNOWN_HOSTS_FILE) when using
-            SSH.
+            When an SSH transport is specified, the key(s) defined in
+            --ssh-key-file (GITSYNC_SSH_KEY_FILE) will be used.  Users are
+            strongly advised to also use --ssh-known-hosts
+            (GITSYNC_SSH_KNOWN_HOSTS) and --ssh-known-hosts-file
+            (GITSYNC_SSH_KNOWN_HOSTS_FILE) when using SSH.
 
     cookies
             When --cookie-file (GITSYNC_COOKIE_FILE) is specified, the

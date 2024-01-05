@@ -1,4 +1,4 @@
-# Copyright 2019 The Kubernetes Authors.
+# Copyright 2023 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,13 +21,12 @@ RUN apk add --no-cache --initdb -p /out \
     alpine-baselayout \
     apk-tools \
     busybox \
-    ca-certificates \
     git \
-    musl \
-    openssh-server \
+    git-daemon \
+    nginx \
+    fcgiwrap \
+    apache2-utils \
     tini \
-    util-linux \
-    wireguard-tools \
     && true
 
 ###############
@@ -39,18 +38,12 @@ WORKDIR /
 
 COPY --from=base /out/ /
 
-RUN mkdir -p /etc/ssh && rm /etc/motd
-COPY sshd_config /etc/ssh/
-COPY sshd.sh /
-
-# Callers should mount a .ssh directory here. Our sshd.sh will copy it and
-# manage permissions.
-VOLUME /dot_ssh
+RUN htpasswd -b -c /etc/htpasswd testuser testpass
 
 # Callers should mount a directory with git repos here.
 VOLUME /git
 
-# Callers can SSH as user "test"
-RUN echo "test:x:65533:65533::/home/test:/usr/bin/git-shell" >> /etc/passwd
+COPY nginx.conf /etc/nginx/
+COPY run.sh /
 
-CMD ["/sbin/tini", "/sshd.sh"]
+CMD ["/sbin/tini", "/run.sh"]
