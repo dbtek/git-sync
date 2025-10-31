@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package logging provides a logging interface.
 package logging
 
 import (
@@ -56,8 +57,10 @@ func (l *Logger) Error(err error, msg string, kvList ...interface{}) {
 		Args map[string]interface{}
 	}{
 		Msg:  msg,
-		Err:  err.Error(),
 		Args: map[string]interface{}{},
+	}
+	if err != nil {
+		payload.Err = err.Error()
 	}
 	if len(kvList)%2 != 0 {
 		kvList = append(kvList, "<no-value>")

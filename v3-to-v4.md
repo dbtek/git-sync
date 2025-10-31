@@ -34,7 +34,7 @@ condition where a symbolic name can change after `git ls-remote` but before
 ### The v4.2+ loop
 
 The v4.2 loop refines the v4 loop even further.  Instead of using ls-remote to
-see what the upstream has and then fetching it, git-sync sill just fetch it by
+see what the upstream has and then fetching it, git-sync will just fetch it by
 ref.  If the local sync already has the corresponding hash, nothing more will
 be synced.  If it did not have that hash before, then it does now and can
 update the worktree.
@@ -46,7 +46,7 @@ own style: either `-flag` or `--flag` were accepted.  git-sync v4 only accepts
 long flag names in the more common two-dash style (`--flag`), and accepts short
 (single-character) flags in the one-dash style (`-v 2`).
 
-The following does not detail every flag available in v4 - just the one that
+The following does not detail every flag available in v4 - just the ones that
 existed in v3 and are different in v4.
 
 ### Verbosity: `--v` -> `-v` or `--verbose`
@@ -159,12 +159,17 @@ Most flags can also be configured by environment variables.  In v3 the
 variables all start with `GIT_SYNC_`.  In v4 they all start with `GITSYNC_`,
 though the old names are still accepted for compatibility.
 
+If both an old (`GIT_SYNC_*`) name and a new (`GITSYNC_*`) name are specified,
+the behavior is:
+* v4.0.x - v4.3.x: the new name is used
+* v4.4.x and up: the old name is used
+
 ## Defaults
 
 ### Depth
 
 git-sync v3 would sync the entire history of the remote repo by default.  v4
-syncs just one commit, by default.  This can be a significant performance and
+syncs just one commit by default.  This can be a significant performance and
 disk-space savings for large repos.  Users who want the full history can
 specify `--depth=0`.
 

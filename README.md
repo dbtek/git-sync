@@ -25,6 +25,41 @@ git-sync can also be configured to make a webhook call or exec a command upon
 successful git repo synchronization. The call is made after the symlink is
 updated.
 
+## What it produces and why - the contract
+
+git-sync has two required flags: `--repo`, which specifies which remote git
+repo to sync, and `--root` which specifies a working directory for git-sync,
+which presents an "API" of sorts.
+
+The `--root` directory is _not_ the synced data.
+
+Inside the `--root` directory git-sync stores the synced git state and other
+things.  That directory may or may not respond to git commands - it's an
+implementation detail.
+
+One of the things in that directory is a symlink (see the `--link` flag) to the
+most recently synced data.  This is how the data is expected to be consumed,
+and is considered to be the "contract" between git-sync and consumers.  The
+exact target of that symlink is an implementation detail, but the leaf
+component of the target (i.e. `basename "$(readlink <link>)"`) is the git hash
+of the synced revision.  This is also part of the contract.
+
+git-sync looks for changes in the remote repo periodically (see the `--period`
+flag) and will attempt to transfer as little data as possible and use as little
+disk space as possible (see the `--depth` and `--git-gc` flags), but this is
+not part of the contract.
+
+### Why the symlink?
+
+git checkouts are not "atomic" operations.  If you look at the repository while
+a checkout is happening, you might see data that is neither exactly the old
+revision nor the new.  git-sync "publishes" updates via the symlink to present
+an atomic interface to consumers.  When the remote repo has changed, git-sync
+will fetch the data _without_ checking it out, then create a new worktree, then
+change the symlink to point to that new worktree.
+
+git-sync does not currently have a no-symlink mode.
+
 ## Major update: v3.x -> v4.x
 
 git-sync has undergone many significant changes between v3.x and v4.x.  [See
@@ -61,8 +96,6 @@ export DIR="/tmp/git-data"
 mkdir -p $DIR
 
 # run the container (as your own UID)
-
-# run the container
 docker run -d \
     -v $DIR:/tmp/git \
     -u$(id -u):$(id -g) \
@@ -87,7 +120,7 @@ program can abort if an invalid flag is specified, but a misspelled environment
 variable will just be ignored.  We've tried to stay backwards-compatible across
 major versions (by accepting deprecated flags and environment variables), but
 some things have evolved, and users are encouraged to use the most recent flags
-for their major verion.
+for their major version.
 
 ### Volumes
 
@@ -141,11 +174,44 @@ DESCRIPTION
     git-sync can also be configured to make a webhook call upon successful git
     repo synchronization.  The call is made after the symlink is updated.
 
+CONTRACT
+
+    git-sync has two required flags:
+      --repo: specifies which remote git repo to sync
+      --root: specifies a working directory for git-sync
+
+    The root directory is not the synced data.
+
+    Inside the root directory, git-sync stores the synced git state and other
+    things.  That directory may or may not respond to git commands - it's an
+    implementation detail.
+
+    One of the things in that directory is a symlink (see the --link flag) to
+    the most recently synced data.  This is how the data is expected to be
+    consumed, and is considered to be the "contract" between git-sync and
+    consumers.  The exact target of that symlink is an implementation detail,
+    but the leaf component of the target (i.e. basename "$(readlink <link>)")
+    is the git hash of the synced revision.  This is also part of the contract.
+
+    Why the symlink?  git checkouts are not "atomic" operations.  If you look
+    at the repository while a checkout is happening, you might see data that is
+    neither exactly the old revision nor the new.  git-sync "publishes" updates
+    via the symlink to present an atomic interface to consumers.  When the
+    remote repo has changed, git-sync will fetch the data _without_ checking it
+    out, then create a new worktree, then change the symlink to point to that
+    new worktree.
+
+    git-sync looks for changes in the remote repo periodically (see the
+    --period flag) and will attempt to transfer as little data as possible and
+    use as little disk space as possible (see the --depth and --git-gc flags),
+    but this is not part of the contract.
+
 OPTIONS
 
     Many options can be specified as either a commandline flag or an environment
     variable, but flags are preferred because a misspelled flag is a fatal
-    error while a misspelled environment variable is silently ignored.
+    error while a misspelled environment variable is silently ignored.  Some
+    options can only be specified as an environment variable.
 
     --add-user, $GITSYNC_ADD_USER
             Add a record to /etc/passwd for the current UID/GID.  This is
@@ -163,11 +229,12 @@ OPTIONS
 
     --credential <string>, $GITSYNC_CREDENTIAL
             Make one or more credentials available for authentication (see git
-            help credential).  This is similar to --username and --password or
-            --password-file, but for specific URLs, for example when using
-            submodules.  The value for this flag is either a JSON-encoded
-            object (see the schema below) or a JSON-encoded list of that same
-            object type.  This flag may be specified more than once.
+            help credential).  This is similar to --username and
+            $GITSYNC_PASSWORD or --password-file, but for specific URLs, for
+            example when using submodules.  The value for this flag is either a
+            JSON-encoded object (see the schema below) or a JSON-encoded list
+            of that same object type.  This flag may be specified more than
+            once.
 
             Object schema:
               - url:            string, required
@@ -246,6 +313,29 @@ OPTIONS
             - off: Disable explicit git garbage collection, which may be a good
               fit when also using --one-time.
 
+    --github-base-url <string>, $GITSYNC_GITHUB_BASE_URL
+            The GitHub base URL to use in GitHub requests when GitHub app
+            authentication is used. If not specified, defaults to
+            https://api.github.com/.
+
+    --github-app-private-key-file <string>, $GITSYNC_GITHUB_APP_PRIVATE_KEY_FILE
+            The file from which the private key to use for GitHub app
+            authentication will be read.
+
+    --github-app-installation-id <int>, $GITSYNC_GITHUB_APP_INSTALLATION_ID
+            The installation ID of the GitHub app used for GitHub app
+            authentication.
+
+    --github-app-application-id <int>, $GITSYNC_GITHUB_APP_APPLICATION_ID
+            The app ID of the GitHub app used for GitHub app authentication.
+            One of --github-app-application-id or --github-app-client-id is required
+            when GitHub app authentication is used.
+
+    --github-app-client-id <int>, $GITSYNC_GITHUB_APP_CLIENT_ID
+            The client ID of the GitHub app used for GitHub app authentication.
+            One of --github-app-application-id or --github-app-client-id is required
+            when GitHub app authentication is used.
+
     --group-write, $GITSYNC_GROUP_WRITE
             Ensure that data written to disk (including the git repo metadata,
             checked out files, worktrees, and symlink) are all group writable.
@@ -253,7 +343,7 @@ OPTIONS
             useful in cases where data produced by git-sync is used by a
             different UID.  This replaces the older --change-permissions flag.
 
-    -h, --help
+    -?, -h, --help
             Print help text and exit.
 
     --http-bind <string>, $GITSYNC_HTTP_BIND
@@ -296,16 +386,14 @@ OPTIONS
     --one-time, $GITSYNC_ONE_TIME
             Exit after one sync.
 
-    --password <string>, $GITSYNC_PASSWORD
+    $GITSYNC_PASSWORD
             The password or personal access token (see github docs) to use for
-            git authentication (see --username).  NOTE: for security reasons,
-            users should prefer --password-file or $GITSYNC_PASSWORD_FILE for
-            specifying the password.
+            git authentication (see --username).  See also --password-file.
 
     --password-file <string>, $GITSYNC_PASSWORD_FILE
             The file from which the password or personal access token (see
             github docs) to use for git authentication (see --username) will be
-            read.
+            read.  See also $GITSYNC_PASSWORD.
 
     --period <duration>, $GITSYNC_PERIOD
             How long to wait between sync attempts.  This must be at least
@@ -378,8 +466,8 @@ OPTIONS
 
     --username <string>, $GITSYNC_USERNAME
             The username to use for git authentication (see --password-file or
-            --password).  If more than one username and password is required
-            (e.g. with submodules), use --credential.
+            $GITSYNC_PASSWORD).  If more than one username and password is
+            required (e.g. with submodules), use --credential.
 
     -v, --verbose <int>, $GITSYNC_VERBOSE
             Set the log verbosity level.  Logs at this level and lower will be
@@ -437,32 +525,49 @@ AUTHENTICATION
     and "git@example.com:repo" will try to use SSH.
 
     username/password
-            The --username (GITSYNC_USERNAME) and --password-file
-            (GITSYNC_PASSWORD_FILE) or --password (GITSYNC_PASSWORD) flags
-            will be used.  To prevent password leaks, the --password-file flag
-            or GITSYNC_PASSWORD environment variable is almost always
-            preferred to the --password flag.
+            The --username ($GITSYNC_USERNAME) and $GITSYNC_PASSWORD or
+            --password-file ($GITSYNC_PASSWORD_FILE) flags will be used.  To
+            prevent password leaks, the --password-file flag or
+            $GITSYNC_PASSWORD environment variable is almost always preferred
+            to the --password flag, which is deprecated.
 
-            A variant of this is --askpass-url (GITSYNC_ASKPASS_URL), which
+            A variant of this is --askpass-url ($GITSYNC_ASKPASS_URL), which
             consults a URL (e.g. http://metadata) to get credentials on each
             sync.
 
             When using submodules it may be necessary to specify more than one
             username and password, which can be done with --credential
-            (GITSYNC_CREDENTIAL).  All of the username+password pairs, from
-            both --username/--password and --credential are fed into 'git
-            credential approve'.
+            ($GITSYNC_CREDENTIAL).  All of the username+password pairs, from
+            both --username/$GITSYNC_PASSWORD and --credential are fed into
+            'git credential approve'.
 
     SSH
             When an SSH transport is specified, the key(s) defined in
-            --ssh-key-file (GITSYNC_SSH_KEY_FILE) will be used.  Users are
+            --ssh-key-file ($GITSYNC_SSH_KEY_FILE) will be used.  Users are
             strongly advised to also use --ssh-known-hosts
-            (GITSYNC_SSH_KNOWN_HOSTS) and --ssh-known-hosts-file
-            (GITSYNC_SSH_KNOWN_HOSTS_FILE) when using SSH.
+            ($GITSYNC_SSH_KNOWN_HOSTS) and --ssh-known-hosts-file
+            ($GITSYNC_SSH_KNOWN_HOSTS_FILE) when using SSH.
 
     cookies
-            When --cookie-file (GITSYNC_COOKIE_FILE) is specified, the
+            When --cookie-file ($GITSYNC_COOKIE_FILE) is specified, the
             associated cookies can contain authentication information.
+
+    github app
+           When --github-app-private-key-file ($GITSYNC_GITHUB_APP_PRIVATE_KEY_FILE),
+           --github-app-application-id ($GITSYNC_GITHUB_APP_APPLICATION_ID) or
+           --github-app-client-id ($GITSYNC_GITHUB_APP_CLIENT_ID)
+           and --github-app-installation_id ($GITSYNC_GITHUB_APP_INSTALLATION_ID)
+           are specified, GitHub app authentication will be used.
+
+           These credentials are used to request a short-lived token which
+           is used for authentication. The base URL of the GitHub request made
+           to retrieve the token can also be specified via
+           --github-base-url ($GITSYNC_GITHUB_BASE_URL), which defaults to
+           https://api.github.com/.
+
+           The GitHub app must have sufficient access to the repository to sync.
+           It should be installed to the repository or organization containing
+           the repository, and given read access (see github docs).
 
 HOOKS
 

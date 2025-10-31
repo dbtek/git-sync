@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright 2016 The Kubernetes Authors.
 #
@@ -35,7 +35,7 @@ export CGO_ENABLED=0
 export GOARCH="${ARCH}"
 export GOOS="${OS}"
 
-if [[ "${BUILD_DEBUG:-}" == 1 ]]; then
+if [[ "${BUILD_DEBUG:-0}" == 1 ]]; then
     # Debugging - disable optimizations and inlining
     gogcflags="all=-N -l"
     goasmflags=""

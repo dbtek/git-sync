@@ -17,11 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.20.6'
+          go-version: '1.24.1'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: git-sync
 
@@ -34,16 +34,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.20.6'
+          go-version: '1.24.1'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: git-sync
 
       - name: make test
         working-directory: git-sync
+        env:
+          SKIP_GITHUB_APP_TEST: true
+          #SKIP_GITHUB_APP_TEST: false
+          #TEST_GITHUB_APP_APPLICATION_ID: ${{ secrets.TEST_GITHUB_APP_APPLICATION_ID }}
+          #TEST_GITHUB_APP_AUTH_TEST_REPO: ${{ secrets.TEST_GITHUB_APP_AUTH_TEST_REPO }}
+          #TEST_GITHUB_APP_CLIENT_ID: ${{ secrets.TEST_GITHUB_APP_CLIENT_ID }}
+          #TEST_GITHUB_APP_INSTALLATION_ID: ${{ secrets.TEST_GITHUB_APP_INSTALLATION_ID }}
+          #TEST_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TEST_GITHUB_APP_PRIVATE_KEY }}
         run: |
           make test
 
@@ -51,11 +59,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.20.6'
+          go-version: '1.24.1'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: git-sync
 
@@ -64,10 +72,10 @@ jobs:
       # There is a risk of drift between the two, but this is only linting,
       # not runtime correctness!
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v8
         with:
           working-directory: git-sync
-          version: v1.53.3
+          version: v2.1.0
 
       - name: make lint
         working-directory: git-sync

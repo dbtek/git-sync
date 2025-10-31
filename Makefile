@@ -45,13 +45,13 @@ ALL_PLATFORMS := linux/amd64 linux/arm linux/arm64 linux/ppc64le linux/s390x
 OS := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
 ARCH := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
 
-BASEIMAGE ?= registry.k8s.io/build-image/debian-base:bookworm-v1.0.0
+BASEIMAGE ?= debian:trixie
 
 IMAGE := $(REGISTRY)/$(BIN)
 TAG := $(VERSION)
 OS_ARCH_TAG := $(TAG)__$(OS)_$(ARCH)
 
-BUILD_IMAGE ?= golang:1.20-alpine
+BUILD_IMAGE ?= golang:1.25
 
 DBG_MAKEFILE ?=
 ifneq ($(DBG_MAKEFILE),1)
@@ -149,10 +149,10 @@ DOTFILE_IMAGE = $(subst /,_,$(IMAGE))-$(OS_ARCH_TAG)
 LICENSES = .licenses
 
 $(LICENSES):
-	pushd tools >/dev/null;                                   \
-	  export GOOS=$(shell go env GOHOSTOS);                   \
-	  export GOARCH=$(shell go env GOHOSTARCH);               \
-	  go build -o ../bin/tools github.com/google/go-licenses; \
+	pushd tools >/dev/null;                                       \
+	  export GOOS=$(shell go env GOHOSTOS);                       \
+	  export GOARCH=$(shell go env GOHOSTARCH);                   \
+	  go build -o ../bin/tools/ github.com/google/go-licenses/v2; \
 	  popd >/dev/null
 	rm -rf $(LICENSES)
 	./bin/tools/go-licenses save ./... --save_path=$(LICENSES)
@@ -277,10 +277,16 @@ container-clean:
 bin-clean:
 	rm -rf .go bin
 
-lint-staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@2023.1.3
-
 lint-golangci-lint:
-	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.3 run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.0 run -v
 
-lint: lint-staticcheck lint-golangci-lint
+lint-shellcheck:
+	docker run \
+	    --rm \
+	    -v `pwd`:`pwd` \
+	    -w `pwd` \
+	    docker.io/koalaman/shellcheck-alpine:v0.9.0 \
+	        shellcheck \
+	        $$(git ls-files ':!:vendor' '*.sh')
+
+lint: lint-golangci-lint lint-shellcheck
